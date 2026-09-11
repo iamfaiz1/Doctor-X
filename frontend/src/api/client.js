@@ -66,7 +66,9 @@ export async function predict(file) {
  * Generates Grad-CAM for one target class.
  * @param {File} file - The image file
  * @param {string} targetClass - One value from /api/classes
- * @returns {{ target_class: string, method: string, image_data_uri: string }}
+ * @returns {{ model: string, target_class: string, probability: number,
+ *   original_image_data_uri: string, heatmap_image_data_uri: string,
+ *   overlay_image_data_uri: string, has_positive_evidence: boolean, message: string | null }}
  */
 export async function explain(file, targetClass) {
   const form = new FormData()

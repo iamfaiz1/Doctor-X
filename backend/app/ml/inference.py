@@ -8,7 +8,10 @@ from PIL import Image
 
 from app.core.config import Settings
 from app.ml.constants import LABELS, MODEL_NAME, MODEL_VERSION
-from app.ml.gradcam import create_overlay
+from app.ml.explainability.base import ExplainabilityError
+from app.ml.explainability.gradcam import GradCAM
+from app.ml.explainability.registry import get_model_explanation
+from app.ml.explainability.visualization import render_images
 from app.ml.model import build_model
 from app.ml.preprocessing import preprocess
 
@@ -65,12 +68,29 @@ class InferenceService:
             probabilities = torch.sigmoid(model(tensor))[0].detach().cpu().tolist()
         return [{"label": label, "probability": probability} for label, probability in zip(LABELS, probabilities)]
 
-    def explain(self, image: Image.Image, target: str) -> str:
+    def explain(self, image: Image.Image, target: str) -> dict[str, object]:
         model = self._require_model()
         if target not in LABELS:
             raise ValueError(f"Unsupported class '{target}'.")
         tensor = preprocess(image).to(self._device)
-        return create_overlay(model, tensor, image, LABELS.index(target))
+        try:
+            explanation_config = get_model_explanation("densenet121_chexpert")
+            output = GradCAM(model, explanation_config.target_layer_for(model)).generate(tensor, LABELS.index(target))
+            original, heatmap, overlay = render_images(image, output.heatmap, output.has_positive_evidence)
+        except ExplainabilityError as exc:
+            raise ModelUnavailableError(str(exc)) from exc
+        probability = float(torch.sigmoid(output.logits)[0, LABELS.index(target)].cpu())
+        return {
+            "model": MODEL_NAME,
+            "target_class": target,
+            "probability": probability,
+            "target_layer": explanation_config.target_layer_name,
+            "has_positive_evidence": output.has_positive_evidence,
+            "message": None if output.has_positive_evidence else "No positive localized Grad-CAM evidence was found for this target class.",
+            "original_image_data_uri": original,
+            "heatmap_image_data_uri": heatmap,
+            "overlay_image_data_uri": overlay,
+        }
 
     def _require_model(self) -> torch.nn.Module:
         if self._model is None:

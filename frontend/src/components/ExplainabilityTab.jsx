@@ -25,6 +25,18 @@ export default function ExplainabilityTab({ analysisResult, uploadedFile }) {
       .catch(() => {}) // keep DEFAULT_CLASSES on failure
   }, [])
 
+  // Start from the most likely supported class for the current image instead
+  // of always defaulting to "No Finding".
+  useEffect(() => {
+    const predictions = analysisResult?.predictions
+    if (!predictions?.length) return
+    const supported = new Set(classes)
+    const topPrediction = predictions
+      .filter(prediction => supported.has(prediction.label))
+      .reduce((top, prediction) => (!top || prediction.probability > top.probability ? prediction : top), null)
+    if (topPrediction) setTargetClass(topPrediction.label)
+  }, [analysisResult, classes])
+
   const handleGenerate = async () => {
     if (!uploadedFile) return
     setLoading(true)
@@ -107,25 +119,33 @@ export default function ExplainabilityTab({ analysisResult, uploadedFile }) {
       )}
 
       {/* Grad-CAM result — image_data_uri is a ready-made data URI */}
-      {explainResult?.image_data_uri ? (
+      {explainResult?.overlay_image_data_uri ? (
         <>
           <div className="image-compare fade-in">
             <div className="image-frame">
-              <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 12 }}>
-                (Original radiograph not re-sent — see Upload tab)
-              </div>
+              <img src={explainResult.original_image_data_uri} alt="Original radiograph" />
               <div className="image-caption">Original Radiograph</div>
             </div>
             <div className="image-frame">
               <img
-                src={explainResult.image_data_uri}
+                src={explainResult.overlay_image_data_uri}
                 alt={`Grad-CAM for ${explainResult.target_class}`}
               />
               <div className="image-caption">
-                {explainResult.method} — {explainResult.target_class}
+                {explainResult.method} — {explainResult.target_class} ({(explainResult.probability * 100).toFixed(1)}%)
               </div>
             </div>
           </div>
+          <div className="image-frame fade-in" style={{ marginTop: 16, maxWidth: 520 }}>
+            <img src={explainResult.heatmap_image_data_uri} alt={`Heatmap for ${explainResult.target_class}`} />
+            <div className="image-caption">Class-specific activation heatmap</div>
+          </div>
+          {!explainResult.has_positive_evidence && (
+            <div className="alert warning" style={{ marginTop: 14 }}>
+              <span>⚠️</span>
+              <span>{explainResult.message || 'No positive localized evidence was found for this target class.'}</span>
+            </div>
+          )}
           <div className="alert info" style={{ marginTop: 14 }}>
             <span>ℹ️</span>
             <span>
