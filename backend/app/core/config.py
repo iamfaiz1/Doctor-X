@@ -21,6 +21,9 @@ class Settings:
     max_upload_bytes: int
     require_model_on_startup: bool
     allowed_origins: tuple[str, ...]
+    gemini_api_key: str | None
+    gemini_model: str
+    report_directory: Path
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -39,6 +42,9 @@ class Settings:
             max_upload_bytes=int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))),
             require_model_on_startup=_as_bool(os.getenv("REQUIRE_MODEL_ON_STARTUP", "true")),
             allowed_origins=origins,
+            gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
+            gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            report_directory=PROJECT_ROOT / os.getenv("REPORT_DIRECTORY", "generated_reports"),
         )
 
 

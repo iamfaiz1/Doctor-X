@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { predict } from './api/client'
+import { analyzeImage } from './api/client'
 
 import LandingPage from './components/LandingPage'
 import Sidebar from './components/Sidebar'
@@ -8,11 +8,13 @@ import ResultsTab from './components/ResultsTab'
 import ExplainabilityTab from './components/ExplainabilityTab'
 import ReportTab from './components/ReportTab'
 import BenchmarkTab from './components/BenchmarkTab'
+import ChatTab from './components/ChatTab'
 
 const TABS = [
   { id: 'upload',         label: '📤 Upload & Quality'      },
   { id: 'results',        label: '📊 Diagnostic Predictions' },
   { id: 'explainability', label: '🎯 Explainability'         },
+  { id: 'chat',           label: '💬 AI Chat'                },
   { id: 'report',         label: '📋 Clinical Report'        },
   { id: 'benchmark',      label: 'ℹ️ Benchmarks'             },
 ]
@@ -25,20 +27,21 @@ export default function App() {
   const [activeTab, setActiveTab]           = useState('upload')
   const [uploadedFile, setUploadedFile]     = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
+  const [analysisId, setAnalysisId]         = useState(null)
   const [isAnalyzing, setIsAnalyzing]       = useState(false)
   const [analysisError, setAnalysisError]   = useState(null)
 
-  // Run prediction only (no Grad-CAM target needed on initial upload)
+  // Use /api/analyze so we get an analysis_id for explanations, chat, and reports
   const runAnalysis = useCallback(async (file) => {
     setUploadedFile(file)
     setAnalysisResult(null)
+    setAnalysisId(null)
     setAnalysisError(null)
     setIsAnalyzing(true)
     try {
-      // Use /api/predict for the initial scan; Grad-CAM is triggered per-class
-      // in ExplainabilityTab via /api/explain or /api/analyze.
-      const result = await predict(file)
+      const result = await analyzeImage(file, { includeGradcam: false })
       setAnalysisResult(result)
+      setAnalysisId(result.analysis_id ?? null)
     } catch (err) {
       setAnalysisError(err?.response?.data?.detail || err.message)
     } finally {
@@ -110,6 +113,7 @@ export default function App() {
           {activeTab === 'results' && (
             <ResultsTab
               predictions={analysisResult?.predictions || []}
+              analysisId={analysisId}
             />
           )}
           {activeTab === 'explainability' && (
@@ -118,9 +122,15 @@ export default function App() {
               uploadedFile={uploadedFile}
             />
           )}
+          {activeTab === 'chat' && (
+            <ChatTab
+              analysisId={analysisId}
+            />
+          )}
           {activeTab === 'report' && (
             <ReportTab
               analysisResult={analysisResult}
+              analysisId={analysisId}
             />
           )}
           {activeTab === 'benchmark' && (
