@@ -1,91 +1,61 @@
 # Doctor-X API
 
-The API has no authentication. It accepts chest X-ray images in memory only; uploaded images and generated explanations are not written to disk. This research system is not a clinical diagnosis.
+Authentication: none. Error body: `{"detail":"message"}`.
 
-## `GET /api/health`
+## GET /api/health
 
-Checks that the HTTP service is running.
+Response `200`: `{"status":"ok"}`.
 
-Successful response:
+## GET /api/models
 
-```json
-{"status":"ok"}
-```
+Response `200`: `{"models":[{"model_id":"densenet121","name":"DenseNet-121 CheXpert","version":"10k-fixed","classes":[]}]}`.
 
-## `GET /api/model/info`
+## GET /api/models/{model_id}
 
-Returns the active model metadata, its device, load state, and the exact notebook class order. It does not disclose filesystem paths.
+Response `200`: model metadata. Errors: `404` unknown model.
 
-Successful response:
+## GET /api/model/info
 
-```json
-{"name":"DenseNet-121 CheXpert","architecture":"torchvision DenseNet-121","version":"10k-fixed","num_classes":14,"classes":["No Finding"],"device":"cpu","loaded":true}
-```
+Response `200`: active model metadata.
 
-## `GET /api/classes`
+## GET /api/classes
 
-Returns the exact ordered classes supported by the checkpoint.
+Response `200`: `{"classes":["No Finding"]}`.
 
-Successful response:
+## POST /api/predict
 
-```json
-{"classes":["No Finding","Enlarged Cardiomediastinum","Cardiomegaly","Lung Opacity","Lung Lesion","Edema","Consolidation","Pneumonia","Atelectasis","Pneumothorax","Pleural Effusion","Pleural Other","Fracture","Support Devices"]}
-```
+Request: `multipart/form-data`: `file` (required image), `model_id` (optional, default `densenet121`).
 
-## `POST /api/predict`
+Response `200`: `{"model_id":"densenet121","model_version":"10k-fixed","model":"DenseNet-121 CheXpert","predictions":[{"label":"Edema","probability":0.82}]}`. Errors: `400`, `413`, `415`, `422`, `503`.
 
-Runs multi-label inference. Send `multipart/form-data` with required field `file` (a valid image, maximum size set by `MAX_UPLOAD_BYTES`). Model output is sigmoid probability for every class; the notebook did not establish deployed clinical decision thresholds, so this endpoint deliberately does not call a finding positive or negative.
+## POST /api/explain
 
-```bash
-curl -X POST http://localhost:8000/api/predict -F "file=@xray.png"
-```
+Request: `multipart/form-data`: `file`, `target_class`, optional `model_id`.
 
-Successful response:
+Response `200`: Grad-CAM result with `model_id`, `model_version`, `target_class`, `probability`, attribution metadata, and PNG data URIs. Errors: `400`, `413`, `415`, `422`, `503`.
 
-```json
-{"model":"DenseNet-121 CheXpert","predictions":[{"label":"No Finding","probability":0.841}]}
-```
+## POST /api/analyze
 
-Errors: `400` empty upload, `413` oversized upload, `415` invalid/corrupt image, `503` unavailable model.
+Request: `multipart/form-data`: `file`; optional `model_id`, `target_class`, `include_gradcam` (default `true`).
 
-## `POST /api/explain`
+Response `200`: `{"analysis_id":"uuid","created_at":"ISO-8601","model_id":"densenet121","predictions":[],"explanation":null}`. Errors: `400`, `413`, `415`, `422`, `503`.
 
-Produces Grad-CAM for one exact requested class. Send `multipart/form-data` with `file` and `target_class` (one value from `/api/classes`). The response supplies PNG data URIs suitable for image `src` attributes. The selected class is scored from its logit and its sigmoid probability is returned.
+## POST /api/explanations
 
-```bash
-curl -X POST http://localhost:8000/api/explain -F "file=@xray.png" -F "target_class=Edema"
-```
+Request JSON: `{"analysis_id":"uuid","stage":"overall_analysis"}`.
 
-Successful response:
+Response `200`: `{"analysis_id":"uuid","stage":"overall_analysis","status":"available","medical_explanation":"...","simple_explanation":"..."}`. `status` is `unavailable` when Gemini is not configured.
 
-```json
-{
-  "model":"DenseNet-121 CheXpert",
-  "target_class":"Edema",
-  "probability":0.82,
-  "method":"Grad-CAM",
-  "target_layer":"model.features",
-  "has_positive_evidence":true,
-  "message":null,
-  "original_image_data_uri":"data:image/png;base64,...",
-  "heatmap_image_data_uri":"data:image/png;base64,...",
-  "overlay_image_data_uri":"data:image/png;base64,..."
-}
-```
+## POST /api/chat
 
-Errors: `400` empty upload, `413` oversized upload, `415` invalid/corrupt image, `422` missing or unsupported class, `503` unavailable model or explanation failure.
+Request JSON: `{"analysis_id":"uuid","session_id":"optional","message":"What does this mean?"}`.
 
-Frontend usage:
+Response `200`: `{"analysis_id":"uuid","session_id":"optional","status":"available","medical_explanation":"...","simple_explanation":"..."}`. Errors: `404` unknown analysis, `422` invalid request.
 
-```js
-const form = new FormData()
-form.append("file", uploadedFile)
-form.append("target_class", "Edema")
-const response = await fetch("/api/explain", { method: "POST", body: form })
-const result = await response.json()
-overlayImage.src = result.overlay_image_data_uri
-```
+## POST /api/reports
 
-## `POST /api/analyze`
+Request JSON: `{"analysis_id":"uuid"}`. Response `200`: `{"report_id":"uuid","analysis_id":"uuid"}`. Errors: `404`, `503`.
 
-Runs both prediction and Grad-CAM from one upload. Its request fields are the same as `/api/explain`; its response combines the `/api/predict` and `/api/explain` response objects.
+## GET /api/reports/{report_id}
+
+Response `200`: PDF download. Errors: `404`.

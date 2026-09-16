@@ -6,7 +6,7 @@ Grad-CAM highlights input regions that most influenced one selected model output
 
 The registered model is `densenet121_chexpert`, using the final Kaggle DenseNet-121 architecture and checkpoint. Its adapter resolves `model.features` as the target layer. This module ends in DenseNet's `norm5` layer and is the final spatial feature map before ReLU and global average pooling, as verified in `densenet-10k-fixed.ipynb`.
 
-The service reuses the prediction pipeline's RGB conversion, direct 320x320 resize, tensor conversion, and ImageNet normalization. It scores the selected multi-label **logit**, then reports that class's sigmoid probability.
+The service reuses the predictioen pipeline's RGB conversion, direct 320x320 resize, tensor conversion, and ImageNet normalization. It scores the selected multi-label **logit**, then reports that class's sigmoid probability.
 
 ## Design
 

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -9,11 +9,15 @@ class Prediction(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    model_id: str = "densenet121"
+    model_version: Optional[str] = None
     model: str
-    predictions: list[Prediction]
+    predictions: List[Prediction]
 
 
 class ExplanationResponse(BaseModel):
+    model_id: str = "densenet121"
+    model_version: Optional[str] = None
     model: str
     target_class: str
     probability: float = Field(ge=0, le=1)
@@ -27,4 +31,17 @@ class ExplanationResponse(BaseModel):
 
 
 class AnalysisResponse(PredictionResponse):
-    explanation: ExplanationResponse
+    analysis_id: Optional[str] = None
+    created_at: Optional[str] = None
+    explanation: Optional[ExplanationResponse] = None
+
+
+class ExplanationRequest(BaseModel):
+    analysis_id: str
+    stage: str = "overall_analysis"
+
+
+class ChatRequest(BaseModel):
+    analysis_id: str
+    message: str = Field(min_length=1, max_length=2000)
+    session_id: Optional[str] = None
